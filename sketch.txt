@@ -1,0 +1,424 @@
+#include <Wire.h>
+
+#include <Keypad.h>
+
+
+
+const byte ROWS = 4;
+const byte COLS = 4;
+char hexaKeys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+byte rowPins[ROWS] = {9, 8, 7, 6};
+byte colPins[COLS] = {5, 4, 3, 2};
+
+Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
+
+void setup() {
+  Wire.begin();
+  Serial.begin(9600);
+  Serial.println("Master Initialized");
+}
+
+void loop() {
+  char customKey = customKeypad.getKey();
+  if (customKey) {
+    Serial.print("Key Pressed: ");
+    Serial.println(customKey);
+    
+    Wire.beginTransmission(0x20);
+    Wire.write(customKey);
+    Wire.endTransmission();
+    delay(200); // Debounce delay
+  }
+}
+
+##############
+
+#include <Wire.h>
+
+#include <LiquidCrystal_I2C.h>
+
+
+
+LiquidCrystal_I2C lcd(0x20, 16, 2); // Set the LCD address to 0x20 for a 16 chars and 2 line display
+
+void setup() {
+  Wire.begin(0x20); // Set this Arduino as an I2C slave with address 0x20
+  Wire.onReceive(receiveEvent); // Register the receive event handler
+  lcd.init(); // Initialize the LCD
+  lcd.backlight(); // Turn on the backlight
+  lcd.setCursor(0, 0);
+  lcd.print("Enter password:");
+}
+
+void loop() {
+  // Nothing to do here, everything is handled in the receiveEvent function
+}
+
+void receiveEvent(int bytes) {
+  while (Wire.available()) {
+    char receivedChar = Wire.read(); // Read the received character
+    lcd.setCursor(0, 1); // Move cursor to the second line
+    lcd.print(receivedChar); // Display the key on the LCD
+  }
+}
+
+###########
+
+#include <Wire.h>
+
+
+
+
+#define PIR_PIN 2
+
+void setup() {
+  pinMode(PIR_PIN, INPUT);
+  Wire.begin(); // Start I2C as Master
+  Serial.begin(9600);
+}
+
+void loop() {
+  int motionDetected = digitalRead(PIR_PIN); // Read PIR sensor state
+  Wire.beginTransmission(8);                // Begin I2C communication with Slave (address 8)
+  Wire.write(motionDetected);               // Send PIR state to Slave
+  Wire.endTransmission();                   // End I2C communication
+
+  delay(500); // Small delay to prevent flooding the Slave
+}
+
+###########
+
+#include <LiquidCrystal_I2C.h>
+
+
+#include <Wire.h>
+
+
+#define BUZZER_PIN 10
+#define LED_PIN 9
+
+LiquidCrystal_I2C lcd(0x20, 16, 2); // I2C LCD at address 0x27
+
+volatile int motionState = 0; // Variable to store the received PIR state
+
+void setup() {
+  lcd.init();
+  lcd.backlight();
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  Wire.begin(8);                     // Start I2C as Slave with address 8
+  Wire.onReceive(receiveEvent);      // Set up receive event
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (motionState == HIGH) {
+    // Motion detected
+    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(BUZZER_PIN, HIGH);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Motion Detected!");
+  } else {
+    // No motion
+    digitalWrite(LED_PIN, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("No Motion");
+  }
+  delay(500);
+}
+
+// This function runs when data is received via I2C
+void receiveEvent(int bytes) {
+  motionState = Wire.read(); // Read the PIR state sent by Master
+}
+
+##########
+01
+#include <Keypad.h> // Include the Keypad library
+#include <Adafruit_NeoPixel.h> // Include the NeoPixel library for WS2812
+
+// Define the keypad layout
+const byte ROWS = 4; // Four rows
+const byte COLS = 4; // Four columns
+char keys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+
+// Connect the keypad row and column pins to Arduino
+byte rowPins[ROWS] = {9, 8, 7, 6}; // Rows 1 to 4
+byte colPins[COLS] = {5, 4, 3, 2}; // Columns 1 to 4
+
+// Create a Keypad object
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// Define LED, buzzer, and WS2812 pins
+const int ledPin = 12; // LED connected to pin 12
+const int buzzerPin = 11; // Buzzer connected to pin 11
+const int ws2812Pin = 10; // WS2812 connected to pin 10
+
+// Create a NeoPixel object for WS2812
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(1, ws2812Pin, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  Serial.begin(9600); // Initialize serial communication
+  pinMode(ledPin, OUTPUT); // Set LED pin as output
+  pinMode(buzzerPin, OUTPUT); // Set buzzer pin as output
+  strip.begin(); // Initialize the NeoPixel strip
+  strip.show(); // Turn off the NeoPixel initially
+}
+
+void loop() {
+  char key = keypad.getKey(); // Read the key pressed on the keypad
+
+  if (key) {
+    Serial.println(key); // Display the key pressed in the serial monitor
+
+    // Perform actions based on the key pressed
+    switch (key) {
+      case '1':
+        blinkLED(); // Blink the LED 3 times
+        break;
+      case '2':
+        playBuzzer(); // Play a tone on the buzzer
+        break;
+      case '3':
+        lightWS2812(); // Light up the WS2812 with different colors
+        break;
+    }
+  }
+}
+
+// Function to blink the LED 3 times
+void blinkLED() {
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(ledPin, HIGH); // Turn on the LED
+    delay(100); // Wait for 100ms
+    digitalWrite(ledPin, LOW); // Turn off the LED
+    delay(100); // Wait for 100ms
+  }
+}
+
+// Function to play a tone on the buzzer
+void playBuzzer() {
+  tone(buzzerPin, 1200); // Play a 1200Hz tone
+  delay(200); // Wait for 200ms
+  noTone(buzzerPin); // Turn off the buzzer
+  delay(200); // Wait for 200ms
+}
+
+// Function to light up the WS2812 with different colors
+void lightWS2812() {
+  strip.setPixelColor(0, strip.Color(255, 0, 0)); // Red
+  strip.show(); // Update the NeoPixel
+  delay(500); // Wait for 500ms
+
+  strip.setPixelColor(0, strip.Color(0, 255, 0)); // Green
+  strip.show(); // Update the NeoPixel
+  delay(500); // Wait for 500ms
+
+  strip.setPixelColor(0, strip.Color(0, 0, 255)); // Blue
+  strip.show(); // Update the NeoPixel
+  delay(500); // Wait for 500ms
+
+  strip.setPixelColor(0, strip.Color(0, 0, 0)); // Turn off
+  strip.show(); // Update the NeoPixel
+}
+
+##################
+
+#include <OneWire.h> // Library for DS18B20
+#include <DallasTemperature.h> // Library for DS18B20
+#include <Wire.h> // Library for I2C communication
+#include <Adafruit_SSD1306.h> // Library for OLED display
+#include <LiquidCrystal_I2C.h> // Library for I2C LCD
+
+// Define DS18B20 pin
+#define ONE_WIRE_BUS 8 // DS18B20 connected to pin 8
+
+// Define PIR sensor pin
+#define PIR_PIN 7 // PIR sensor connected to pin 7
+
+// Define OLED display settings
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Define I2C LCD settings
+#define LCD_ADDRESS 0x27 // I2C address of the LCD
+#define LCD_COLUMNS 16
+#define LCD_ROWS 2
+LiquidCrystal_I2C lcd(LCD_ADDRESS, LCD_COLUMNS, LCD_ROWS);
+
+// Setup a oneWire instance to communicate with DS18B20
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
+void setup() {
+  Serial.begin(9600); // Initialize serial communication
+
+  // Initialize DS18B20 sensor
+  sensors.begin();
+
+  // Initialize PIR sensor
+  pinMode(PIR_PIN, INPUT);
+
+  // Initialize OLED display
+  if (!display.begin(SSD1306_I2C_ADDRESS, OLED_RESET)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;); // Halt if OLED initialization fails
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Hello World!");
+  display.display();
+
+  // Initialize I2C LCD
+  lcd.begin();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Hello World!");
+}
+
+void loop() {
+  // Read temperature from DS18B20
+  sensors.requestTemperatures();
+  float celsius = sensors.getTempCByIndex(0);
+  float fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
+
+  // Print temperature values to Serial Monitor
+  Serial.print("Temperature: ");
+  Serial.print(celsius);
+  Serial.print(" °C, ");
+  Serial.print(fahrenheit);
+  Serial.println(" °F");
+
+  // Read PIR sensor
+  bool motionDetected = digitalRead(PIR_PIN);
+
+  // Print PIR sensor reading to Serial Monitor
+  if (motionDetected) {
+    Serial.println("Motion Detected!");
+  } else {
+    Serial.println("No Motion");
+  }
+
+  // Update OLED display based on temperature
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.print("Temperature: ");
+  display.print(celsius);
+  display.print(" °C");
+
+  if (celsius >= 0 && celsius <= 10) {
+    display.setCursor(0, 20);
+    display.println("Cool");
+  } else if (celsius >= 11 && celsius <= 30) {
+    display.setCursor(0, 20);
+    display.println("Hot");
+  } else if (celsius >= 20 && celsius <= 35 && motionDetected) {
+    display.setCursor(0, 20);
+    display.println("Human Detected");
+  }
+  display.display();
+
+  // Update I2C LCD based on motion detection
+  lcd.setCursor(0, 1);
+  if (motionDetected) {
+    lcd.print("Motion Detected");
+  } else {
+    lcd.print("No Motion      ");
+  }
+
+  delay(1000); // Wait for 1 second before next reading
+}
+
+################
+
+#include <Servo.h> // Include the Servo library
+
+// Define sensor and component pins
+#define SOIL_MOISTURE_PIN A0 // Soil moisture sensor connected to A0
+#define PHOTORESISTOR_PIN A1 // Photoresistor connected to A1
+#define RGB_RED_PIN 9 // RGB LED red pin connected to 9
+#define RGB_GREEN_PIN 10 // RGB LED green pin connected to 10
+#define RGB_BLUE_PIN 11 // RGB LED blue pin connected to 11
+#define SERVO_PIN 6 // Servo motor connected to pin 6
+
+// Create a Servo object
+Servo myServo;
+
+void setup() {
+  Serial.begin(9600); // Initialize serial communication
+
+  // Set RGB LED pins as output
+  pinMode(RGB_RED_PIN, OUTPUT);
+  pinMode(RGB_GREEN_PIN, OUTPUT);
+  pinMode(RGB_BLUE_PIN, OUTPUT);
+
+  // Attach the servo to the pin
+  myServo.attach(SERVO_PIN);
+  myServo.write(0); // Initialize servo to 0 degrees
+}
+
+void loop() {
+  // Read soil moisture value
+  int soilMoisture = analogRead(SOIL_MOISTURE_PIN);
+  Serial.print("Soil Moisture: ");
+  Serial.println(soilMoisture);
+
+  // Read photoresistor value
+  int lightLevel = analogRead(PHOTORESISTOR_PIN);
+  Serial.print("Light Level: ");
+  Serial.println(lightLevel);
+
+  // Control RGB LED based on soil moisture
+  if (soilMoisture < 150) {
+    blinkRGB(200); // Blink RGB LED with 200ms interval
+  } else {
+    digitalWrite(RGB_RED_PIN, LOW); // Turn off RGB LED
+    digitalWrite(RGB_GREEN_PIN, LOW);
+    digitalWrite(RGB_BLUE_PIN, LOW);
+  }
+
+  // Control servo motor based on soil moisture and light level
+  if (soilMoisture < 100 && lightLevel > 500) {
+    myServo.write(180); // Rotate servo to 180 degrees
+  } else {
+    myServo.write(0); // Rotate servo to 0 degrees
+  }
+
+  delay(500); // Wait for 500ms before next reading
+}
+
+// Function to blink RGB LED
+void blinkRGB(int interval) {
+  digitalWrite(RGB_RED_PIN, HIGH); // Turn on red LED
+  delay(interval);
+  digitalWrite(RGB_RED_PIN, LOW); // Turn off red LED
+  delay(interval);
+
+  digitalWrite(RGB_GREEN_PIN, HIGH); // Turn on green LED
+  delay(interval);
+  digitalWrite(RGB_GREEN_PIN, LOW); // Turn off green LED
+  delay(interval);
+
+  digitalWrite(RGB_BLUE_PIN, HIGH); // Turn on blue LED
+  delay(interval);
+  digitalWrite(RGB_BLUE_PIN, LOW); // Turn off blue LED
+  delay(interval);
+}
