@@ -422,3 +422,76 @@ void blinkRGB(int interval) {
   digitalWrite(RGB_BLUE_PIN, LOW); // Turn off blue LED
   delay(interval);
 }
+
+#$############
+
+#include <Wire.h>
+
+const int ldrPin = A1; 
+
+void setup() {
+  Wire.begin(); // Join I2C bus as master
+  Serial.begin(9600);
+}
+
+void loop() {
+  int ldrValue = analogRead(ldrPin);
+  Serial.println(ldrValue);
+  
+  Wire.beginTransmission(8); // Start communication with slave (address 8)
+  Wire.write(ldrValue >> 8);  // Send high byte
+  Wire.write(ldrValue & 0xFF); // Send low byte
+  Wire.endTransmission(); 
+
+  delay(500);
+}
+
+----------------
+#include <Wire.h>
+
+#include <Servo.h>
+
+
+const int LEDPin = 10; // LED connected to Digital Pin 10
+const int LDRThreshold = 512; // Threshold for LDR value
+
+Servo myServo;
+const int ServoPin = 9; // Servo connected to Digital Pin 9
+volatile int LDRValue = 0; // Use volatile for I2C ISR updates
+
+void setup() {
+  pinMode(LEDPin, OUTPUT); // Set LED pin as output
+  myServo.attach(ServoPin); // Attach servo to pin 9
+  Wire.begin(8); // Initialize I2C with address 8
+  Wire.onReceive(receiveEvent); // Register I2C receive event
+  Serial.begin(9600); // Optional: For debugging
+}
+
+void loop() {
+  // Print received LDR value to Serial Monitor for debugging
+  Serial.print("Received LDR Value: ");
+  Serial.println(LDRValue);
+
+  if (LDRValue < LDRThreshold) {
+    // If LDR value is low, blink the LED
+    digitalWrite(LEDPin, HIGH);
+    delay(500);
+    digitalWrite(LEDPin, LOW);
+    delay(500);
+  } else {
+    // If LDR value is high, move the servo
+    myServo.write(90); // Move servo to 90 degrees
+    delay(1000);
+    myServo.write(0); // Move servo back to 0 degrees
+    delay(1000);
+  }
+}
+
+// I2C receive event
+void receiveEvent(int bytes) {
+  if (Wire.available() >= 2) {
+    int highByte = Wire.read(); // Read high byte
+    int lowByte = Wire.read(); // Read low byte
+    LDRValue = (highByte << 8) | lowByte; // Combine high and low bytes
+  }
+}
